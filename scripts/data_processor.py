@@ -9,12 +9,16 @@ import logging
 logging.basicConfig(filename='data_processing.log', level=logging.INFO, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-class DataProcessor:
+class DataProcessor:    
     def __init__(self):
+        """Initialize the DataProcessor with an empty data dictionary."""
         self.data = {}
         
     def get_data(self, symbols, start_date, end_date):
-        """Fetch historical data for each symbol between the specified dates."""
+        """
+        Fetch historical data for the given symbols within the specified date range.
+        Uses Yahoo Finance as the data source.
+        """
         for symbol in symbols:
             try:
                 logging.info(f"Fetching data for {symbol} from {start_date} to {end_date}")
@@ -25,8 +29,12 @@ class DataProcessor:
             except Exception as e:
                 logging.error(f"Error fetching data for {symbol}: {e}")
         return self.data
+
     def clean_data(self):
-        """Handle missing values by forward filling or dropping remaining nulls."""
+        """
+        Clean data by handling missing values using forward fill and dropping rows 
+        with remaining null values.
+        """
         for symbol, df in self.data.items():
             try:
                 logging.info(f"Cleaning data for {symbol}")
@@ -39,7 +47,9 @@ class DataProcessor:
         return self.data
 
     def basic_statistics(self):
-        """Return basic statistics for each symbol."""
+        """
+        Compute and return basic statistical summaries (mean, std, etc.) for each symbol.
+        """
         stats = {}
         for symbol, df in self.data.items():
             try:
@@ -50,7 +60,9 @@ class DataProcessor:
         return stats
     
     def plot_closing_prices(self):
-        """Plot the closing prices over time for each symbol."""
+        """
+        Plot the closing prices over time for each symbol.
+        """
         for symbol, df in self.data.items():
             try:
                 logging.info(f"Plotting closing prices for {symbol}")
@@ -65,7 +77,10 @@ class DataProcessor:
                 logging.error(f"Error plotting closing prices for {symbol}: {e}")
     
     def calculate_daily_returns(self):
-        """Calculate daily returns and add to each dataframe."""
+        """
+        Calculate daily percentage changes (returns) and add them as a new column 
+        to each dataframe.
+        """
         for symbol, df in self.data.items():
             try:
                 logging.info(f"Calculating daily returns for {symbol}")
@@ -75,7 +90,9 @@ class DataProcessor:
         return self.data
     
     def plot_daily_returns(self):
-        """Plot daily percentage change to observe volatility."""
+        """
+        Plot daily returns over time to observe volatility for each symbol.
+        """
         for symbol, df in self.data.items():
             try:
                 logging.info(f"Plotting daily returns for {symbol}")
@@ -90,7 +107,9 @@ class DataProcessor:
                 logging.error(f"Error plotting daily returns for {symbol}: {e}")
     
     def calculate_rolling_stats(self, window=20):
-        """Calculate rolling mean and standard deviation for each symbol."""
+        """
+        Compute rolling mean and standard deviation for the closing price of each symbol.
+        """
         for symbol, df in self.data.items():
             try:
                 logging.info(f"Calculating rolling statistics for {symbol}")
@@ -101,7 +120,9 @@ class DataProcessor:
         return self.data
     
     def plot_rolling_stats(self):
-        """Plot price with rolling mean and standard deviation."""
+        """
+        Plot the closing price along with its rolling mean and standard deviation.
+        """
         for symbol, df in self.data.items():
             try:
                 logging.info(f"Plotting rolling statistics for {symbol}")
@@ -119,7 +140,9 @@ class DataProcessor:
                 logging.error(f"Error plotting rolling statistics for {symbol}: {e}")
     
     def detect_outliers(self, threshold=3):
-        """Detect outliers based on standard deviation threshold."""
+        """
+        Detect outliers in daily returns based on a standard deviation threshold.
+        """
         outliers = {}
         for symbol, df in self.data.items():
             try:
@@ -130,8 +153,11 @@ class DataProcessor:
             except Exception as e:
                 logging.error(f"Error detecting outliers for {symbol}: {e}")
         return outliers
+    
     def plot_outliers(self):
-        """Plot the outliers detected in daily returns."""
+        """
+        Plot daily returns and highlight outliers detected.
+        """
         for symbol, df in self.data.items():
             try:
                 outliers = self.detect_outliers()
@@ -151,8 +177,11 @@ class DataProcessor:
                     logging.info(f"No outliers found for {symbol}")
             except Exception as e:
                 logging.error(f"Error plotting outliers for {symbol}: {e}")
+    
     def decompose_time_series(self):
-        """Decompose the time series into trend, seasonal, and residual components."""
+        """
+        Decompose the closing price time series into trend, seasonal, and residual components.
+        """
         decomposition_results = {}
         for symbol, df in self.data.items():
             try:
@@ -169,7 +198,9 @@ class DataProcessor:
         return decomposition_results
 
     def calculate_risk_metrics(self, confidence_level=0.05):
-        """Calculate Value at Risk (VaR) and Sharpe Ratio for each symbol."""
+        """
+        Calculate Value at Risk (VaR) and Sharpe Ratio for each symbol's daily returns.
+        """
         metrics = {}
         for symbol, df in self.data.items():
             try:
@@ -180,4 +211,4 @@ class DataProcessor:
                 metrics[symbol] = {'VaR': VaR, 'Sharpe Ratio': Sharpe_Ratio}
             except Exception as e:
                 logging.error(f"Error calculating risk metrics for {symbol}: {e}")
-        return metrics   
+        return metrics
