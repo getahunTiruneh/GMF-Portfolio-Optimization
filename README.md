@@ -148,3 +148,5 @@ pip install -r requirements.txt
 ## Author
 
 **Getahun Tiruneh**
+- [LinkedIn](https://www.linkedin.com/in/getahun-tiruneh-390640134/)
+- [GitHub](https://github.com/getahunTiruneh)
