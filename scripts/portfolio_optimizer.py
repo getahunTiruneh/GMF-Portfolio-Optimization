@@ -2,78 +2,69 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
+import seaborn as sns
 
 class PortfolioOptimization:
     def __init__(self, tsla_data, bnd_data, spy_data):
         """
         Initializes the PortfolioOptimization class with data for each asset.
         
-        :param tsla_data: Forecasted data for Tesla stock.
-        :param bnd_data: Forecasted data for Vanguard Total Bond Market ETF.
-        :param spy_data: Forecasted data for S&P 500 ETF.
+        :param tsla_data: DataFrame for Tesla stock.
+        :param bnd_data: DataFrame for Vanguard Total Bond Market ETF.
+        :param spy_data: DataFrame for S&P 500 ETF.
         """
-        # Convert 'Close' column to numeric, in case there are any non-numeric values
         tsla_data['Close'] = pd.to_numeric(tsla_data['Close'], errors='coerce')
         bnd_data['Close'] = pd.to_numeric(bnd_data['Close'], errors='coerce')
         spy_data['Close'] = pd.to_numeric(spy_data['Close'], errors='coerce')
 
-        # Merge the dataframes based on 'Date' and set index as 'Date'
-        self.df = pd.merge(tsla_data[['Date', 'Close']], bnd_data[['Date', 'Close']], on='Date', how='inner')
-        self.df = pd.merge(self.df, spy_data[['Date', 'Close']], on='Date', how='inner')
+        # Calculate daily returns for each asset
+        self.tsla_returns = tsla_data['Close'].pct_change().dropna()
+        self.bnd_returns = bnd_data['Close'].pct_change().dropna()
+        self.spy_returns = spy_data['Close'].pct_change().dropna()
 
-        # Rename columns
-        self.df.columns = ['Date', 'TSLA', 'BND', 'SPY']
-        self.df.set_index('Date', inplace=True)
+        # Calculate annualized returns for each asset
+        self.tsla_annualized_return = self.tsla_returns.mean() * 252
+        self.bnd_annualized_return = self.bnd_returns.mean() * 252
+        self.spy_annualized_return = self.spy_returns.mean() * 252
 
-        # Convert the Close columns to numeric just to be safe
-        self.df = self.df.apply(pd.to_numeric, errors='coerce')
-
-        # Calculate daily returns
-        self.returns = self.df.pct_change().dropna()
-
-        # Initialize the annualized returns and covariance matrix
-        self.annualized_returns = self.calculate_annualized_returns()
-        self.cov_matrix = self.calculate_cov_matrix()
-
-    def calculate_annualized_returns(self):
-        """Calculate and return the annualized returns for each asset."""
-        average_daily_returns = self.returns.mean()
-        return average_daily_returns * 252  # Annualize the returns assuming 252 trading days
-
-    def calculate_cov_matrix(self):
-        """Calculate and return the annualized covariance matrix."""
-        return self.returns.cov() * 252  # Annualize the covariance matrix
+        # Calculate the covariance matrix between returns (only necessary for optimization)
+        self.cov_matrix = np.cov([self.tsla_returns, self.bnd_returns, self.spy_returns]) * 252
 
     def optimize_portfolio(self):
         """
         Optimizes the portfolio weights to maximize the Sharpe ratio.
         
-        :return: The optimal portfolio weights that maximize the Sharpe ratio.
+        :return: The optimal portfolio weights.
         """
         # Initial guess for the portfolio weights (equal weights)
         initial_weights = np.array([1/3, 1/3, 1/3])
-        
+
         # Constraints: the sum of weights should be 1
         constraints = ({'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1})
         
         # Bounds for the weights: each weight should be between 0 and 1
-        bounds = [(0, 1) for _ in range(len(self.annualized_returns))]
-        
+        bounds = [(0, 1) for _ in range(3)]
+
         # Optimize portfolio
-        optimal_weights = minimize(self.negative_sharpe_ratio, initial_weights, args=(self.annualized_returns, self.cov_matrix),
+        optimal_weights = minimize(self.negative_sharpe_ratio, initial_weights, args=(self.tsla_annualized_return, 
+                                                                                      self.bnd_annualized_return, 
+                                                                                      self.spy_annualized_return, 
+                                                                                      self.cov_matrix),
                                    method='SLSQP', bounds=bounds, constraints=constraints)
         return optimal_weights.x
 
-    def negative_sharpe_ratio(self, weights, annualized_returns, cov_matrix):
+    def negative_sharpe_ratio(self, weights, tsla_annualized_return, bnd_annualized_return, spy_annualized_return, cov_matrix):
         """
         The objective function for portfolio optimization, which minimizes the negative Sharpe ratio.
         
         :param weights: Portfolio weights for each asset.
-        :param annualized_returns: Annualized returns of the assets.
+        :param tsla_annualized_return: Annualized return of Tesla.
+        :param bnd_annualized_return: Annualized return of Bond ETF.
+        :param spy_annualized_return: Annualized return of S&P 500 ETF.
         :param cov_matrix: Covariance matrix of the asset returns.
         :return: Negative Sharpe ratio (we minimize this to maximize the Sharpe ratio).
         """
-        portfolio_return = np.dot(weights, annualized_returns)
+        portfolio_return = np.dot(weights, [tsla_annualized_return, bnd_annualized_return, spy_annualized_return])
         portfolio_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
         return -portfolio_return / portfolio_volatility  # We negate the Sharpe Ratio to minimize
 
@@ -84,37 +75,60 @@ class PortfolioOptimization:
         :param weights: The weights for each asset in the portfolio.
         :return: A tuple containing the portfolio's expected return, risk, and Sharpe ratio.
         """
-        portfolio_return = np.dot(weights, self.annualized_returns)
+        portfolio_return = np.dot(weights, [self.tsla_annualized_return, self.bnd_annualized_return, self.spy_annualized_return])
         portfolio_volatility = np.sqrt(np.dot(weights.T, np.dot(self.cov_matrix, weights)))
-        risk_free_rate = 0  # Assume 0% risk-free rate for simplicity
-        sharpe_ratio = (portfolio_return - risk_free_rate) / portfolio_volatility
+        sharpe_ratio = portfolio_return / portfolio_volatility
         return portfolio_return, portfolio_volatility, sharpe_ratio
 
-    def visualize_risk_return(self):
+    def efficient_frontier(self):
         """
-        Visualizes the risk-return trade-off for the portfolio.
+        Generates the Efficient Frontier by plotting portfolio performance for different weight combinations.
+        
+        :return: Arrays of returns, volatilities, and Sharpe ratios for portfolios.
         """
-        portfolio_returns = []
-        portfolio_volatilities = []
+        results = np.zeros((3, 1000))
+        for i in range(1000):
+            weights = np.random.random(3)
+            weights /= np.sum(weights)
+            portfolio_return, portfolio_volatility, sharpe_ratio = self.calculate_portfolio_performance(weights)
+            results[0,i] = portfolio_return
+            results[1,i] = portfolio_volatility
+            results[2,i] = sharpe_ratio
+        return results
 
-        for w1 in np.linspace(0, 1, 100):
-            for w2 in np.linspace(0, 1-w1, 100):
-                w3 = 1 - w1 - w2
-                weights = np.array([w1, w2, w3])
-                portfolio_returns.append(np.dot(weights, self.annualized_returns))
-                portfolio_volatilities.append(np.sqrt(np.dot(weights.T, np.dot(self.cov_matrix, weights))))
-
-        # Avoid division by zero for color scaling in scatter plot
-        portfolio_returns = np.array(portfolio_returns)
-        portfolio_volatilities = np.array(portfolio_volatilities)
-        sharpe_ratios = portfolio_returns / portfolio_volatilities
-        sharpe_ratios = np.nan_to_num(sharpe_ratios)  # Replace NaN values with 0
-
-        # Plot the risk-return trade-off
+    def plot_results(self, optimal_weights):
+        """
+        Plot results for portfolio optimization including:
+        - Efficient Frontier
+        - Portfolio Weights
+        - Correlation Heatmap
+        """
+        # Efficient Frontier
+        results = self.efficient_frontier()
+        
+        # Plot Efficient Frontier
         plt.figure(figsize=(10, 6))
-        plt.scatter(portfolio_volatilities, portfolio_returns, c=sharpe_ratios, cmap='viridis')
+        plt.scatter(results[1,:], results[0,:], c=results[2,:], cmap='viridis', marker='o')
         plt.colorbar(label='Sharpe Ratio')
-        plt.xlabel('Volatility (Risk)')
+        plt.title('Efficient Frontier')
+        plt.xlabel('Volatility')
         plt.ylabel('Return')
-        plt.title('Risk-Return Trade-Off')
+        plt.scatter(self.calculate_portfolio_performance(optimal_weights)[1], 
+                    self.calculate_portfolio_performance(optimal_weights)[0], 
+                    color='red', marker='*', s=200, label='Optimized Portfolio')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+        # Portfolio Weights
+        plt.figure(figsize=(8, 5))
+        plt.bar(['TSLA', 'BND', 'SPY'], optimal_weights, color='lightblue')
+        plt.title('Optimized Portfolio Weights')
+        plt.ylabel('Weight')
+        plt.show()
+
+        # Correlation Heatmap
+        correlation_matrix = np.corrcoef([self.tsla_returns, self.bnd_returns, self.spy_returns])
+        sns.heatmap(correlation_matrix, annot=True, xticklabels=['TSLA', 'BND', 'SPY'], yticklabels=['TSLA', 'BND', 'SPY'], cmap='coolwarm', vmin=-1, vmax=1)
+        plt.title('Correlation Matrix of Asset Returns')
         plt.show()
